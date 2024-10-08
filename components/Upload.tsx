@@ -26,6 +26,32 @@ export default function FolderUploadPreview() {
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
+  const readDirectory = async (dirHandle: FileSystemDirectoryHandle): Promise<FileNode> => {
+    const children: FileNode[] = [];
+    
+    for await (const [name, handle] of dirHandle.entries()) {
+      if (handle.kind === 'file') {
+        const file = await handle.getFile();
+        const content = await file.text();
+        children.push({
+          name,
+          type: 'file',
+          content,
+        });
+      } else if (handle.kind === 'directory') {
+        const dir = await readDirectory(handle as FileSystemDirectoryHandle);
+        children.push(dir);
+      }
+    }
+  
+    return {
+      name: dirHandle.name || 'Root',
+      type: 'directory',
+      children,
+    };
+  };
+  
+  
   const handleFolderUpload = async (dataTransfer?: DataTransfer) => {
     if (!("showDirectoryPicker" in window) && !dataTransfer) {
       toast({
@@ -61,13 +87,24 @@ export default function FolderUploadPreview() {
           description: `Uploaded folder: ${folderStructure.name}`,
         });
       } else {
-        const dirHandle = await window.showDirectoryPicker();
-        const structure = await readDirectory(dirHandle);
-        setFolderStructure(structure);
-        toast({
-          title: "Folder uploaded successfully",
-          description: `Uploaded folder: ${structure.name}`,
-        });
+        if (window.showDirectoryPicker) {
+          const dirHandle = await window.showDirectoryPicker();
+          const structure = await readDirectory(dirHandle);
+
+          
+          setFolderStructure(structure);
+          toast({
+            title: "Folder uploaded successfully",
+            description: `Uploaded folder: ${structure.name}`,
+          });
+        } else {
+          toast({
+            title: "Browser not supported",
+            description: "Your browser doesn't support folder upload. Please use a modern browser like Chrome or Edge.",
+            variant: "destructive",
+          });
+        }
+        
       }
     } catch (error) {
       console.error("Error reading folder:", error);
